@@ -1,0 +1,19 @@
+
+# Load the data from the staging table
+staging_df = spark.read.jdbc(url=jdbc_url, table=pg_staging_table, properties=pg_properties)
+
+# Read the target table
+target_df = spark.read.jdbc(url=jdbc_url, table=pg_target_table, properties=pg_properties)
+
+# Perform UPSERT operation: Merge the staging and target dataframes
+upsert_df = staging_df.alias("staging").join(
+    target_df.alias("target"),
+    (staging_df["designation"] == target_df["designation"]),
+    how="outer"
+).select(
+    when(col("staging.active_employees").isNotNull(), col("staging.active_employees")).otherwise(col("target.active_employees")).alias("active_employees") , "staging.designation"
+)
+# Write back to PostgreSQL target table (upsert)
+upsert_df.write.mode("overwrite").jdbc(url=jdbc_url, table=pg_target_table, properties=pg_properties)
+
+print("PostgreSQL UPSERT completed successfully.")
